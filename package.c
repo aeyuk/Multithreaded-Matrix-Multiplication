@@ -8,6 +8,11 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
+typedef struct msg_buf {
+    long msg_type;
+    char text[100];
+} msg_buf;
+
 typedef struct QueueMessage {
     long type;
     int jobid;
@@ -40,8 +45,10 @@ pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 void *DotProduct(void *arg) {
     ThreadData *myArgs = (ThreadData *) arg;
     Msg* myMessage = malloc(sizeof(Msg));
-    pthread_mutex_lock(&lock);
     // printf("thread: %d %d\n", myArgs->rv, myArgs->cv);
+    pthread_mutex_lock(&lock);
+    myMessage->type = 1;
+    myMessage->jobid = myArgs->job;
     myMessage->rowvec = myArgs->rv;
     myMessage->colvec = myArgs->cv;
     myMessage->innerDim = myArgs->inner;
@@ -123,18 +130,18 @@ int main(int argc, char* argv[]) {
     int numCols2 = 0;
     int** matrix2 = LoadMatrix(&fptr2, &numRows2, &numCols2);
 
-    // // Set up Message Queue for Writer Process
-    // key_t key;
-    // int msgid;
-    // if ((key = ftok("aeyuk", 'b')) == -1) {
-    //     printf("ftok() error!\n");
-    //     exit(1);
-    // }
+    // Set up Message Queue for Writer Process
+    key_t key;
+    int msgid;
+    if ((key = ftok("aeyuk", 'b')) == -1) {
+        printf("ftok() error!\n");
+        exit(1);
+    }
     
-    // if ((msgid = msgget(key, 0666 | IPC_CREAT)) == -1) {
-    //     printf("mssget error!\n");
-    //     exit(1);
-    // }
+    if ((msgid = msgget(key, 0666 | IPC_CREAT)) == -1) {
+        printf("mssget error!\n");
+        exit(1);
+    }
 
     Matrices M;
     M.type = 1;
@@ -145,18 +152,19 @@ int main(int argc, char* argv[]) {
     M.r2 = numRows2;
     M.c2 = numCols2;
 
+    // printf("Sending matrix data\n");
     // msgsnd(msgid, &M, sizeof(M), 0);
 
 
-    // Create thread to package subtasks
+    // Create threads to package subtasks
+    // One subtask per dot product
     int job = 0;
-    int totalJobs = numRows1 * numCols1;
+    int totalJobs = numRows1 * numCols2;
     pthread_t threads[totalJobs];
-    Msg* message;
     ThreadData* threadData = malloc(totalJobs * sizeof(ThreadData));
-    // int rc = 0;
     for (int i = 0; i < numRows1; i++) {
         for (int j = 0; j < numCols2; j++) {
+            // Send array of structs with correct data
             threadData[job].sleep = atoi(argv[3]);
             threadData[job].rv = i;
             threadData[job].cv = j;
@@ -166,12 +174,20 @@ int main(int argc, char* argv[]) {
             job++;
         }
     }
+
+    msg_buf f;
+    f.msg_type = 1;
+    strcpy(f.text, "hello");
+
+    // Join threads
+    int rc = 0;
+    Msg* message;
     for (int i = 0; i < totalJobs; i++) {
         pthread_join(threads[i], (void **)&message);
-        printf("join: %d %d\n", message->rowvec, message->colvec);
-        // rc = msgsnd(msgid, &message, sizeof(Msg), 0);
-        // printf("Sending job id %d type %lu size %lu (rc=%d)\n", 
-        // message->jobid, message->type, sizeof(message), rc);
+        // Send threads to reader
+        rc = (msgsnd(msgid, &message, sizeof(message), 0) < 0);
+        printf("Sending job id %d type %lu size %lu (rc=%d)\n", 
+        message->jobid, message->type, sizeof(message), rc);
         free(message);
     }
 
