@@ -45,34 +45,22 @@ typedef struct ThreadData {
 int main(void) {
     // Set up the Message Queue for Reader Process
     key_t key;
-    int msgid;
+    int msqid;
 
     if ((key = ftok("aeyuk", 'b')) < 0) {
         perror("ftok");
         exit(1);
     }
 
-    if ((msgid = msgget(key, 0666 | IPC_CREAT)) < 0) {
+    if ((msqid = msgget(key, 0666 | IPC_CREAT)) < 0) {
         perror("mssget");
         exit(1);
-    } 
+    }  
 
     // Receive matrix data
-    // Matrices M;
-    // msgrcv(msgid, &M, sizeof(Matrices), 1, 0);
-    // printf("Message data received\n");
-    // int totalJobs = M.c1 * M.r2;
-
-    Msg* message = malloc(15 * sizeof(Msg));
-
-    for (int i = 0; i < 15; i++) {
-        if (msgrcv(msgid, &message[i], sizeof(Msg), 1, 0) < 0) {
-            perror("msgrcv");
-            exit(1);
-        }
-        printf("Receiving job id %d type %lu size %lu\n",
-        message[i].jobid, message[i].type, sizeof(message[i]));
-    }
+    Msg message;
+    msgrcv(msqid, (void *)&message, sizeof(message), 1, IPC_NOWAIT);
+    printf("received %d %d\n", message.rowvec, message.colvec);
 
     return 0;
 

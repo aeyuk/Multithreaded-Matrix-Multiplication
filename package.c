@@ -8,11 +8,6 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
-typedef struct msg_buf {
-    long msg_type;
-    char text[100];
-} msg_buf;
-
 typedef struct QueueMessage {
     long type;
     int jobid;
@@ -45,8 +40,8 @@ pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 void *DotProduct(void *arg) {
     ThreadData *myArgs = (ThreadData *) arg;
     Msg* myMessage = malloc(sizeof(Msg));
-    // printf("thread: %d %d\n", myArgs->rv, myArgs->cv);
     pthread_mutex_lock(&lock);
+    // sleep(myArgs->sleep);
     myMessage->type = 1;
     myMessage->jobid = myArgs->job;
     myMessage->rowvec = myArgs->rv;
@@ -132,13 +127,13 @@ int main(int argc, char* argv[]) {
 
     // Set up Message Queue for Writer Process
     key_t key;
-    int msgid;
+    int msqid;
     if ((key = ftok("aeyuk", 'b')) == -1) {
         printf("ftok() error!\n");
         exit(1);
     }
     
-    if ((msgid = msgget(key, 0666 | IPC_CREAT)) == -1) {
+    if ((msqid = msgget(key, 0666 | IPC_CREAT)) == -1) {
         printf("mssget error!\n");
         exit(1);
     }
@@ -153,8 +148,7 @@ int main(int argc, char* argv[]) {
     M.c2 = numCols2;
 
     // printf("Sending matrix data\n");
-    // msgsnd(msgid, &M, sizeof(M), 0);
-
+    // msgsnd(msqid, (void *) &M, sizeof(M), IPC_NOWAIT);
 
     // Create threads to package subtasks
     // One subtask per dot product
@@ -175,21 +169,15 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    msg_buf f;
-    f.msg_type = 1;
-    strcpy(f.text, "hello");
-
     // Join threads
-    int rc = 0;
+    // int rc = 0;
     Msg* message;
     for (int i = 0; i < totalJobs; i++) {
         pthread_join(threads[i], (void **)&message);
-        // Send threads to reader
-        rc = (msgsnd(msgid, &message, sizeof(message), 0) < 0);
-        printf("Sending job id %d type %lu size %lu (rc=%d)\n", 
-        message->jobid, message->type, sizeof(message), rc);
-        free(message);
+        printf("%d %d\n", message->rowvec, message->colvec);
     }
+    msgsnd(msqid, (void *) &message, sizeof(message), IPC_NOWAIT);
+    printf("sent\n");
 
     //Free Matrices
     for (int i = 0; i < numRows1; i++)
