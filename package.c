@@ -17,8 +17,36 @@ typedef struct QueueMessage {
     int data[100];
 } Msg;
 
+typedef struct Matrices {
+    long type;
+    int** m1;
+    int r1;
+    int c1;
+    int r2;
+    int c2;
+    int** m2;
+} Matrices;
+
+typedef struct ThreadData {
+    int rv;
+    int cv;
+    int inner;
+    int job;
+    int sleep;
+} ThreadData;
+
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
 void *DotProduct(void *arg) {
-    return;
+    ThreadData *myArgs = (ThreadData *) arg;
+    Msg* myMessage = malloc(sizeof(Msg));
+    pthread_mutex_lock(&lock);
+    // printf("thread: %d %d\n", myArgs->rv, myArgs->cv);
+    myMessage->rowvec = myArgs->rv;
+    myMessage->colvec = myArgs->cv;
+    myMessage->innerDim = myArgs->inner;
+    pthread_mutex_unlock(&lock);
+    return (void *)myMessage;
 }
 
 int** LoadMatrix(FILE** fptr, int* numRows, int* numCols) {
@@ -95,37 +123,56 @@ int main(int argc, char* argv[]) {
     int numCols2 = 0;
     int** matrix2 = LoadMatrix(&fptr2, &numRows2, &numCols2);
 
-    // Set up Message Queue for Writer Process
-    key_t key;
-    int msgid;
-    if ((key = ftok("aeyuk", 'b')) == -1) {
-        printf("ftok() error!\n");
-        exit(1);
-    }
+    // // Set up Message Queue for Writer Process
+    // key_t key;
+    // int msgid;
+    // if ((key = ftok("aeyuk", 'b')) == -1) {
+    //     printf("ftok() error!\n");
+    //     exit(1);
+    // }
     
-    if ((msgid = msgget(key, 0666 | IPC_CREAT)) == -1) {
-        printf("mssget error!\n");
-        exit(1);
-    } 
+    // if ((msgid = msgget(key, 0666 | IPC_CREAT)) == -1) {
+    //     printf("mssget error!\n");
+    //     exit(1);
+    // }
+
+    Matrices M;
+    M.type = 1;
+    M.m1 = matrix1;
+    M.m2 = matrix2;
+    M.r1 = numRows1;
+    M.c1 = numCols1;
+    M.r2 = numRows2;
+    M.c2 = numCols2;
+
+    // msgsnd(msgid, &M, sizeof(M), 0);
+
 
     // Create thread to package subtasks
-    pthread_t threads[numRows1 * numCols2];
-    Msg message;
     int job = 0;
-    int rc = 0;
+    int totalJobs = numRows1 * numCols1;
+    pthread_t threads[totalJobs];
+    Msg* message;
+    ThreadData* threadData = malloc(totalJobs * sizeof(ThreadData));
+    // int rc = 0;
     for (int i = 0; i < numRows1; i++) {
         for (int j = 0; j < numCols2; j++) {
-            message.type = 1;
-            message.jobid = job;
+            threadData[job].sleep = atoi(argv[3]);
+            threadData[job].rv = i;
+            threadData[job].cv = j;
+            threadData[job].inner = numCols1;
+            threadData[job].job = job;
+            pthread_create(&threads[job], NULL, &DotProduct, &threadData[job]);
             job++;
-            message.rowvec = i;
-            message.colvec = j;
-            message.innerDim = numCols1;
-            rc = msgsnd(msgid, &message, sizeof(message), 0);
-            printf("Sending job id %d type %lu size %lu (rc=%d)\n", 
-            message.jobid, message.type, sizeof(message), rc);
-            pthread_create(&threads[i], NULL, DotProduct, &message);
         }
+    }
+    for (int i = 0; i < totalJobs; i++) {
+        pthread_join(threads[i], (void **)&message);
+        printf("join: %d %d\n", message->rowvec, message->colvec);
+        // rc = msgsnd(msgid, &message, sizeof(Msg), 0);
+        // printf("Sending job id %d type %lu size %lu (rc=%d)\n", 
+        // message->jobid, message->type, sizeof(message), rc);
+        free(message);
     }
 
     //Free Matrices
@@ -136,6 +183,8 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < numRows2; i++)
         free(matrix2[i]);
     free(matrix2);
+
+    free(threadData);
 
     return 0;
 }

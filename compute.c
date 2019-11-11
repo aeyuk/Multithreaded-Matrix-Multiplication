@@ -7,6 +7,10 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
+#define MAX_THREADS = 2500 // Largest dimension is 50; 50 * 50 = 2500
+#define MAX_QUEUE = 65536
+
+
 typedef struct QueueMessage {
     long type;
     int jobid;
@@ -16,8 +20,17 @@ typedef struct QueueMessage {
     int data[100];
 } Msg;
 
-int main(void) {
+typedef struct Matrices {
+    long type;
+    int** m1;
+    int r1;
+    int c1;
+    int r2;
+    int c2;
+    int** m2;
+} Matrices;
 
+int main(void) {
     // Set up the Message Queue for Reader Process
     key_t key;
     int msgid;
@@ -32,10 +45,26 @@ int main(void) {
         exit(1);
     } 
 
-    Msg message;
+    Matrices M;
+    msgrcv(msgid, &M, sizeof(Matrices), 1, 0);
+    printf("%d\n", M.c2);
 
+    Msg message;
     msgrcv(msgid, &message, sizeof(Msg), 1, 0);
 
-    printf("Message received. Inner dim: %d\n", message.innerDim);
+    printf("Message received. colvec %d\n", message.colvec);
 
+
+
+    return 0;
 }
+
+
+/*
+How do i share the entire matrices? Row/Col Nums?
+What am I even doing?
+Why is a threadpool so complex?
+What am I packaging?
+How do you return a value from a thread?
+When do you join threads?
+*/
