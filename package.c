@@ -9,31 +9,29 @@
 #include <sys/msg.h>
 
 typedef struct QueueMessage {
-    long type;
-    int jobid;
-    int rowvec;
-    int colvec;
-    int innerDim;
-    int data[100];
+    long type;      // Message type
+    int jobid;      // Thread #
+    int rowvec;     // Row index of new matrix
+    int colvec;     // Col index of new matrix
+    int innerDim;   // Inner dimension for mult
+    int data[100];  // Vector data for mult
 } Msg;
 
-typedef struct Matrices {
-    long type;
-    int** m1;
-    int r1;
-    int c1;
-    int r2;
-    int c2;
-    int** m2;
-} Matrices;
+typedef struct MatixInfo {
+    long type;   // Message type
+    int r1;      // #Rows in Matrix 1 
+    int c2;      // #Cols in Matrix 2
+} MatrixInfo;
 
 typedef struct ThreadData {
-    int rv;
-    int cv;
-    int inner;
-    int job;
-    int sleep;
-    int queueid;
+    long type;	 // Message type
+    int rv;      // Row vector
+    int cv;      // Col vector
+    int inner;   // Inner dim
+    int job;     // Thread #
+    int d[100];  // Data for dot product
+    int sleep;   // Sleep in seconds
+    int queueid; // Message queue id
 } ThreadData;
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -41,19 +39,28 @@ pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 void *DotProduct(void *arg) {
     ThreadData *myArgs = (ThreadData *) arg;
     Msg* myMessage = malloc(sizeof(Msg));
+    // Enter the critical section
     pthread_mutex_lock(&lock);
     sleep(myArgs->sleep);
+    // Package message to send to compute
     myMessage->type = 1;
     myMessage->jobid = myArgs->job;
     myMessage->rowvec = myArgs->rv;
     myMessage->colvec = myArgs->cv;
     myMessage->innerDim = myArgs->inner;
-    memset(&myMessage->data, 0, 100);
-    printf("sizeeee %lu\n", sizeof(Msg));
-    if (msgsnd(myArgs->queueid, &myMessage, sizeof(myMessage), IPC_NOWAIT) <= 0) {
-        perror("msgsnd");
+    // Copy data array over
+    for (int i = 0; i < myArgs->inner * 2; i++) {
+        myMessage->data[i] = myArgs->d[i];
     }
-    printf("it sent\n");
+    // Send message
+    int rc = 0;
+    if ((rc = msgsnd(myArgs->queueid, &myMessage, sizeof(myMessage), 0)) < 0) {
+        printf("msgsnd error!\n");
+    }
+    // Status message
+    printf("Sending job id %d type %lu size %lu (rc = %d)\n",
+    myMessage->jobid, myMessage->type, sizeof(myMessage), rc);
+    // Exit the critical section
     pthread_mutex_unlock(&lock);
     return (void *)myMessage;
 }
@@ -145,17 +152,13 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    // Matrices M;
-    // M.type = 1;
-    // M.m1 = matrix1;
-    // M.m2 = matrix2;
-    // M.r1 = numRows1;
-    // M.c1 = numCols1;
-    // M.r2 = numRows2;
-    // M.c2 = numCols2;
+    MatrixInfo M;
+    M.r1 = numRows1;
+    M.c2 = numCols2;
+    M.type = 1;
 
-    // printf("Sending matrix data\n");
-    // msgsnd(msqid, (void *) &M, sizeof(M), IPC_NOWAIT);
+    printf("Sending matrix data\n");
+    msgsnd(msqid, (void *) &M, sizeof(M), 0);
 
     // Create threads to package subtasks
     // One subtask per dot product
@@ -163,6 +166,7 @@ int main(int argc, char* argv[]) {
     int totalJobs = numRows1 * numCols2;
     pthread_t threads[totalJobs];
     ThreadData* threadData = malloc(totalJobs * sizeof(ThreadData));
+    int index = 0;
     for (int i = 0; i < numRows1; i++) {
         for (int j = 0; j < numCols2; j++) {
             // Send array of structs with correct data
@@ -172,6 +176,14 @@ int main(int argc, char* argv[]) {
             threadData[job].inner = numCols1;
             threadData[job].job = job;
             threadData[job].queueid = msqid;
+            // Add Matrix 1's row vector values to data array
+            for (index = 0; index < numCols1; index++) {
+                threadData[job].d[index] = matrix1[i][index];
+            }
+            // Add Matrix 2's vol vector values to data array
+            for (index = numCols1; index < numCols1*2; index++) {
+                threadData[job].d[index] = matrix2[index-numCols1][j];
+            }
             pthread_create(&threads[job], NULL, &DotProduct, &threadData[job]);
             job++;
         }
@@ -195,4 +207,5 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+
 
