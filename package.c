@@ -33,6 +33,7 @@ typedef struct ThreadData {
     int inner;
     int job;
     int sleep;
+    int queueid;
 } ThreadData;
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -41,12 +42,18 @@ void *DotProduct(void *arg) {
     ThreadData *myArgs = (ThreadData *) arg;
     Msg* myMessage = malloc(sizeof(Msg));
     pthread_mutex_lock(&lock);
-    // sleep(myArgs->sleep);
+    sleep(myArgs->sleep);
     myMessage->type = 1;
     myMessage->jobid = myArgs->job;
     myMessage->rowvec = myArgs->rv;
     myMessage->colvec = myArgs->cv;
     myMessage->innerDim = myArgs->inner;
+    memset(&myMessage->data, 0, 100);
+    printf("sizeeee %lu\n", sizeof(Msg));
+    if (msgsnd(myArgs->queueid, &myMessage, sizeof(myMessage), IPC_NOWAIT) <= 0) {
+        perror("msgsnd");
+    }
+    printf("it sent\n");
     pthread_mutex_unlock(&lock);
     return (void *)myMessage;
 }
@@ -78,7 +85,7 @@ int** LoadMatrix(FILE** fptr, int* numRows, int* numCols) {
         else if (ch == ' ') {
             arr[j] = atoi(buffer);
             j++;
-            bzero(buffer, 32);
+            memset(&buffer, 0, 32);
             i = 0;
         }
         else {
@@ -138,14 +145,14 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    Matrices M;
-    M.type = 1;
-    M.m1 = matrix1;
-    M.m2 = matrix2;
-    M.r1 = numRows1;
-    M.c1 = numCols1;
-    M.r2 = numRows2;
-    M.c2 = numCols2;
+    // Matrices M;
+    // M.type = 1;
+    // M.m1 = matrix1;
+    // M.m2 = matrix2;
+    // M.r1 = numRows1;
+    // M.c1 = numCols1;
+    // M.r2 = numRows2;
+    // M.c2 = numCols2;
 
     // printf("Sending matrix data\n");
     // msgsnd(msqid, (void *) &M, sizeof(M), IPC_NOWAIT);
@@ -164,20 +171,16 @@ int main(int argc, char* argv[]) {
             threadData[job].cv = j;
             threadData[job].inner = numCols1;
             threadData[job].job = job;
+            threadData[job].queueid = msqid;
             pthread_create(&threads[job], NULL, &DotProduct, &threadData[job]);
             job++;
         }
     }
 
     // Join threads
-    // int rc = 0;
-    Msg* message;
     for (int i = 0; i < totalJobs; i++) {
-        pthread_join(threads[i], (void **)&message);
-        printf("%d %d\n", message->rowvec, message->colvec);
+        pthread_join(threads[i], NULL);
     }
-    msgsnd(msqid, (void *) &message, sizeof(message), IPC_NOWAIT);
-    printf("sent\n");
 
     //Free Matrices
     for (int i = 0; i < numRows1; i++)

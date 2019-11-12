@@ -58,9 +58,14 @@ int main(void) {
     }  
 
     // Receive matrix data
-    Msg message;
-    msgrcv(msqid, (void *)&message, sizeof(message), 1, IPC_NOWAIT);
-    printf("received %d %d\n", message.rowvec, message.colvec);
+    Msg* message = malloc(15 * sizeof(message));
+    for (int i = 0; i < 15; i++) {
+        if (msgrcv(msqid, &message[i], sizeof(message[i]), 1, IPC_NOWAIT) <= 0) {
+            perror("msgrcv");
+            exit(3);
+        }
+        printf("received %d %d\n", message[i].rowvec, message[i].colvec);
+    }
 
     return 0;
 
