@@ -11,29 +11,58 @@
 #define MAX_QUEUE = 65536
 
 typedef struct QueueMessage {
-    long type;
-    int jobid;
-    int rowvec;
-    int colvec;
-    int innerDim;
-    int data[100];
+    long type;      // Message type
+    int jobid;      // Thread #
+    int rowvec;     // Row index of new matrix
+    int colvec;     // Col index of new matrix
+    int innerDim;   // Inner dimension for mult
+    int data[100];  // Vector data for mult
 } Msg;
 
 typedef struct ThreadData {
-    long type;
-    int** m1;    // Matrix 1
-    int r1;      // #rows in Matrix 1 
-    int c1;      // #cols in Matrix 1
-    int** m2;	 // Matrix 1
-    int r2;	 // #rows in Matrix 2
-    int c2;      // #cols in Matrix 2
-    int rv;	 // row vector
-    int cv;	 // col vector
-    int inner;	 // inner dim
-    int job;	 // thread #
-    int sleep;	 // sleep in seconds
-    int queueid; // msqid
+    long type;	 // Message type
+    int rv;      // Row vector
+    int cv;      // Col vector
+    int inner;   // Inner dim
+    int job;     // Thread #
+    int d[100];  // Data for dot product
+    int sleep;   // Sleep in seconds
+    int queueid; // Message queue id
 } ThreadData;
+
+// pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+// void *DotProduct(void *arg) {
+//     int id = *((int *) arg);
+    
+//     pthread_mutex_lock(&lock);
+//     Msg *myMessage = malloc(sizeof *myMessage);
+//     printf("%lu\n", sizeof(myMessage));
+//     if (msgrcv(id, &myMessage, sizeof(*myMessage), 1, 0) < 0) {
+//         perror("msgrcv");
+//         exit(3);
+//     }
+//     printf("%d\n %d\n", myMessage->colvec, myMessage->innerDim);
+//     // free(myMessage);
+//     pthread_mutex_unlock(&lock);
+//     return (void *)NULL;
+// }
+
+// void *DotProduct(void *arg) {
+//     int id = *((int *) arg);
+    
+//     pthread_mutex_lock(&lock);
+//     Msg message;
+//     printf("%lu\n", sizeof(message));
+//     if (msgrcv(id, &message, sizeof(message), 1, 0) < 0) {
+//         perror("msgrcv");
+//         exit(3);
+//     }
+//     printf("%d\n %d\n", message.colvec, message.innerDim);
+//     // free(myMessage);
+//     pthread_mutex_unlock(&lock);
+//     return (void *)NULL;
+// }
 
 int main(void) {
     // Set up the Message Queue for Reader Process
@@ -50,33 +79,31 @@ int main(void) {
         exit(1);
     }  
 
-    // Receive matrix data
-    ThreadData matrixInfo;
-    if (msgrcv(msqid, &matrixInfo, sizeof(matrixInfo), 1, 0) <= 0) {
-        perror("msgrcv");
-        exit(3);
-    }    
+/////////////////////////////////
+    printf("%d\n", msqid);
+/////////////////////////////////
 
-    Msg* message = malloc(15 * sizeof(message));
-    for (int i = 0; i < 15; i++) {
-        if (msgrcv(msqid, &message[i], sizeof(message[i]), 1, 0) <= 0) {
+    // pthread_t threads[numThreads];
+
+    // int *id = malloc(sizeof(*id));
+    // *id = msqid;        
+
+    // while(1) {
+    //     pthread_create(&threads[i], NULL, &DotProduct, id);    
+    // }
+
+    // free(id);
+
+    Msg myMessage;
+    while(1) {
+
+        if (msgrcv(msqid, &myMessage, sizeof(Msg), 1, 0) < 0) {
             perror("msgrcv");
             exit(3);
         }
-        printf("received %d %d\n", message[i].rowvec, message[i].colvec);
+        printf("%d %d %d \n", myMessage.rowvec, myMessage.colvec, myMessage.jobid);
     }
-
     return 0;
 
 }
-
-
-/*
-How do i share the entire matrices? Row/Col Nums?
-What am I even doing?
-Why is a threadpool so complex?
-What am I packaging?
-How do you return a value from a thread?
-When do you join threads?
-*/
 

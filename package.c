@@ -3,10 +3,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <string.h>
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <string.h>
 
 typedef struct QueueMessage {
     long type;      // Message type
@@ -16,12 +16,6 @@ typedef struct QueueMessage {
     int innerDim;   // Inner dimension for mult
     int data[100];  // Vector data for mult
 } Msg;
-
-typedef struct MatixInfo {
-    long type;   // Message type
-    int r1;      // #Rows in Matrix 1 
-    int c2;      // #Cols in Matrix 2
-} MatrixInfo;
 
 typedef struct ThreadData {
     long type;	 // Message type
@@ -34,35 +28,48 @@ typedef struct ThreadData {
     int queueid; // Message queue id
 } ThreadData;
 
+
+// TRY ALLOCATING IN COMPUTE THE SAME WAY AND SEE IF SIZE CHANES IN BOTH PROGRAMS
+// TRY MOVING MSGSND OUTSIDE OF THREAD FUNCTION
+
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
-void *DotProduct(void *arg) {
+void *Package(void *arg) {
     ThreadData *myArgs = (ThreadData *) arg;
-    Msg* myMessage = malloc(sizeof(Msg));
+    // Msg *myMessage = malloc(sizeof *myMessage);
+    Msg myMessage;
     // Enter the critical section
     pthread_mutex_lock(&lock);
     sleep(myArgs->sleep);
     // Package message to send to compute
-    myMessage->type = 1;
-    myMessage->jobid = myArgs->job;
-    myMessage->rowvec = myArgs->rv;
-    myMessage->colvec = myArgs->cv;
-    myMessage->innerDim = myArgs->inner;
+    myMessage.type = myArgs->type;
+    myMessage.jobid = myArgs->job;
+    myMessage.rowvec = myArgs->rv;
+    myMessage.colvec = myArgs->cv;
+    myMessage.innerDim = myArgs->inner;
     // Copy data array over
-    for (int i = 0; i < myArgs->inner * 2; i++) {
-        myMessage->data[i] = myArgs->d[i];
+    int i;
+    for (i = 0; i < myArgs->inner * 2; i++) {
+        myMessage.data[i] = myArgs->d[i];
     }
+
+    // Calculate size of message to send
+    int size = (4 + (2 * myMessage.innerDim)) * sizeof(int);
+
     // Send message
     int rc = 0;
-    if ((rc = msgsnd(myArgs->queueid, &myMessage, sizeof(myMessage), 0)) < 0) {
-        printf("msgsnd error!\n");
+    if ((rc = msgsnd(myArgs->queueid, &myMessage, size, IPC_NOWAIT)) < 0) {
+        perror("msgsnd");
+        exit(3);
     }
+
     // Status message
-    printf("Sending job id %d type %lu size %lu (rc = %d)\n",
-    myMessage->jobid, myMessage->type, sizeof(myMessage), rc);
+    printf("Sending job id %d type %lu size %d (rc = %d)\n",
+    myMessage.jobid, myMessage.type, size, rc);
+
     // Exit the critical section
     pthread_mutex_unlock(&lock);
-    return (void *)myMessage;
+    return NULL;
 }
 
 int** LoadMatrix(FILE** fptr, int* numRows, int* numCols) {
@@ -143,22 +150,18 @@ int main(int argc, char* argv[]) {
     key_t key;
     int msqid;
     if ((key = ftok("aeyuk", 'b')) == -1) {
-        printf("ftok() error!\n");
+        perror("ftok");
         exit(1);
     }
     
     if ((msqid = msgget(key, 0666 | IPC_CREAT)) == -1) {
-        printf("mssget error!\n");
+        perror("mssget");
         exit(1);
     }
 
-    MatrixInfo M;
-    M.r1 = numRows1;
-    M.c2 = numCols2;
-    M.type = 1;
-
-    printf("Sending matrix data\n");
-    msgsnd(msqid, (void *) &M, sizeof(M), 0);
+/////////////////////////////////
+    printf("%d\n", msqid);
+/////////////////////////////////
 
     // Create threads to package subtasks
     // One subtask per dot product
@@ -171,6 +174,7 @@ int main(int argc, char* argv[]) {
         for (int j = 0; j < numCols2; j++) {
             // Send array of structs with correct data
             threadData[job].sleep = atoi(argv[3]);
+            threadData[job].type = 1;
             threadData[job].rv = i;
             threadData[job].cv = j;
             threadData[job].inner = numCols1;
@@ -184,7 +188,7 @@ int main(int argc, char* argv[]) {
             for (index = numCols1; index < numCols1*2; index++) {
                 threadData[job].d[index] = matrix2[index-numCols1][j];
             }
-            pthread_create(&threads[job], NULL, &DotProduct, &threadData[job]);
+            pthread_create(&threads[job], NULL, &Package, &threadData[job]);
             job++;
         }
     }
