@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <string.h>
 
 #define MAX_THREADS = 2500 // Largest dimension is 50; 50 * 50 = 2500
 #define MAX_QUEUE = 65536
@@ -30,39 +31,49 @@ typedef struct ThreadData {
     int queueid; // Message queue id
 } ThreadData;
 
-// pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
-// void *DotProduct(void *arg) {
-//     int id = *((int *) arg);
+void *DotProduct(void *arg) {
+    // Get the Message Queue id
+    int id = *((int *) arg);
     
-//     pthread_mutex_lock(&lock);
-//     Msg *myMessage = malloc(sizeof *myMessage);
-//     printf("%lu\n", sizeof(myMessage));
-//     if (msgrcv(id, &myMessage, sizeof(*myMessage), 1, 0) < 0) {
-//         perror("msgrcv");
-//         exit(3);
-//     }
-//     printf("%d\n %d\n", myMessage->colvec, myMessage->innerDim);
-//     // free(myMessage);
-//     pthread_mutex_unlock(&lock);
-//     return (void *)NULL;
-// }
+    pthread_mutex_lock(&lock);
 
-// void *DotProduct(void *arg) {
-//     int id = *((int *) arg);
-    
-//     pthread_mutex_lock(&lock);
-//     Msg message;
-//     printf("%lu\n", sizeof(message));
-//     if (msgrcv(id, &message, sizeof(message), 1, 0) < 0) {
-//         perror("msgrcv");
-//         exit(3);
-//     }
-//     printf("%d\n %d\n", message.colvec, message.innerDim);
-//     // free(myMessage);
-//     pthread_mutex_unlock(&lock);
-//     return (void *)NULL;
-// }
+    // Read in messages from package
+    Msg message;
+    if (msgrcv(id, &message, sizeof(Msg), 1, 0) < 0) {
+        perror("msgrcv");
+        exit(3);
+    }
+
+    // Calculate dot product
+    // Matrix 1's vector is stored first in the data array
+    int dotProduct = 0;
+    for (int i = 0; i < (message.innerDim); i++) {
+        int j = i+4;
+        dotProduct += (message.data[i] * message.data[j]);
+    }
+    printf("Dot product: %d\n", dotProduct);
+
+    // Update data array to hold the dot product
+    message.data[0] = dotProduct;
+
+    // Set message type to 2 to send back to package
+    message.type = 2;
+
+    // Calculate size of message to send
+    // 5 is for the 5 integers being sent over in the struct
+    int size = 5 * sizeof(int);
+
+    // Send dot products back to package
+    if (msgsnd(id, &message, size, IPC_NOWAIT) < 0) {
+        perror("msgsnd");
+        exit(3);
+    }
+
+    pthread_mutex_unlock(&lock);
+    return (void *)NULL;
+}
 
 int main(void) {
     // Set up the Message Queue for Reader Process
@@ -83,26 +94,27 @@ int main(void) {
     printf("%d\n", msqid);
 /////////////////////////////////
 
-    // pthread_t threads[numThreads];
-
-    // int *id = malloc(sizeof(*id));
-    // *id = msqid;        
-
-    // while(1) {
-    //     pthread_create(&threads[i], NULL, &DotProduct, id);    
+    // // Receive number of jobs
+    // int numThreads;
+    // if (msgrcv(msqid, &numThreads, sizeof(int), 1, 0) < 0) {
+    //     perror("msgrcv");
+    //     exit(3);
     // }
 
-    // free(id);
+    pthread_t threads[15];
+    int *id = malloc(sizeof(*id));
+    *id = msqid;        
 
-    Msg myMessage;
-    while(1) {
-
-        if (msgrcv(msqid, &myMessage, sizeof(Msg), 1, 0) < 0) {
-            perror("msgrcv");
-            exit(3);
-        }
-        printf("%d %d %d \n", myMessage.rowvec, myMessage.colvec, myMessage.jobid);
+    for (int i = 0; i < 15; i++) {
+        pthread_create(&threads[i], NULL, &DotProduct, id);    
     }
+
+    for (int i = 0; i < 15; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    free(id);
+
     return 0;
 
 }

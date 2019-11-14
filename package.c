@@ -17,6 +17,11 @@ typedef struct QueueMessage {
     int data[100];  // Vector data for mult
 } Msg;
 
+typedef struct MatrixInfo {
+    long type;
+    int jobs;
+} MatrixInfo;
+
 typedef struct ThreadData {
     long type;	 // Message type
     int rv;      // Row vector
@@ -167,6 +172,16 @@ int main(int argc, char* argv[]) {
     // One subtask per dot product
     int job = 0;
     int totalJobs = numRows1 * numCols2;
+
+    // Send over matrix info
+    MatrixInfo matrixInfo;
+    matrixInfo.type = 1;
+    matrixInfo.jobs = totalJobs;
+    if (msgsnd(msqid, &totalJobs, sizeof(int), IPC_NOWAIT) < 0) {
+        perror("msgsnd");
+        exit(3);
+    }
+
     pthread_t threads[totalJobs];
     ThreadData* threadData = malloc(totalJobs * sizeof(ThreadData));
     int index = 0;
@@ -184,10 +199,11 @@ int main(int argc, char* argv[]) {
             for (index = 0; index < numCols1; index++) {
                 threadData[job].d[index] = matrix1[i][index];
             }
-            // Add Matrix 2's vol vector values to data array
+            // Add Matrix 2's col vector values to data array
             for (index = numCols1; index < numCols1*2; index++) {
                 threadData[job].d[index] = matrix2[index-numCols1][j];
             }
+            index++;
             pthread_create(&threads[job], NULL, &Package, &threadData[job]);
             job++;
         }
