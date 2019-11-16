@@ -21,19 +21,26 @@ When a `SIGINT` is received with `Ctl-C`, each program will print out a status o
 `Jobs Sent 5 Jobs Received 0`
 
 Each program will print a message when a message is successfully sent of received.
-`Sending job id 12 type 1 size 48 (rc=0)` 
-`Receiving job id 12 type 1 size 48`
+```
+Sending job id 12 type 1 size 48 (rc=0) 
+Receiving job id 12 type 1 size 48
+```
 
 ## Input Files
 There are two input files. One file for each input matrix with integers space delimted.
+The first two characters of each are the row x column dimensions.
 
 <matrix1.dat>
-`3 4
-1 2 3 4 5 6 7 8 9 10 11 12`
+```
+3 4
+1 2 3 4 5 6 7 8 9 10 11 12
+```
 
 <matrix2.dat>
-`4 5
-1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20`
+```
+4 5
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
+```
 
 ## Output File
 One file for the output matrix with integers space delimited.
