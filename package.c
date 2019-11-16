@@ -164,10 +164,6 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-/////////////////////////////////
-    printf("%d\n", msqid);
-/////////////////////////////////
-
     // Create threads to package subtasks
     // One subtask per dot product
     int job = 0;
@@ -175,7 +171,7 @@ int main(int argc, char* argv[]) {
 
     // Send over matrix info
     MatrixInfo matrixInfo;
-    matrixInfo.type = 1;
+    matrixInfo.type = 4;
     matrixInfo.jobs = totalJobs;
     if (msgsnd(msqid, &matrixInfo, sizeof(int), IPC_NOWAIT) < 0) {
         perror("msgsnd");
@@ -188,7 +184,7 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < numRows1; i++) {
         for (int j = 0; j < numCols2; j++) {
             // Send array of structs with correct data
-            threadData[job].sleep = atoi(argv[3]);
+            threadData[job].sleep = atoi(argv[4]);
             threadData[job].type = 1;
             threadData[job].rv = i;
             threadData[job].cv = j;
@@ -213,6 +209,35 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < totalJobs; i++) {
         pthread_join(threads[i], NULL);
     }
+
+    // Output results to output file
+    FILE *outputFile;
+    outputFile = fopen(argv[3], "w");
+    if (NULL == outputFile) {
+        printf("Cannot open file %s\n", argv[3]);
+        exit(1);
+    }
+
+    // Read result messages from the message queue, store results in array
+    int finalMatrix[numRows1][numCols2];
+    for (int i = 0; i < totalJobs; i++) {
+        Msg result;
+        if (msgrcv(msqid, &result, sizeof(Msg), 2, 0) < 0) {
+            perror("msgrcv");
+            exit(1);
+        }
+        printf("Receiving job id %d type %lu size %lu\n", result.jobid, result.type, 
+        (5 * sizeof(int)));
+        finalMatrix[result.rowvec][result.colvec] = result.data[0];
+        printf("%d %d = %d\n", result.rowvec, result.colvec, result.data[0]);
+    }
+    for (int i = 0; i < numRows1; i++) {
+        for (int j = 0; j < numCols2; j++) {
+            fprintf(outputFile, "%d ", finalMatrix[i][j]);
+        }
+    }
+    fclose(outputFile);
+
 
     //Free Matrices
     for (int i = 0; i < numRows1; i++)
