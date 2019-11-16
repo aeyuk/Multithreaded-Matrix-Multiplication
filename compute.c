@@ -63,14 +63,23 @@ typedef struct Threadpool {
   int started;
 } Threadpool;
 
+// Lock and notify were made global for all functions to properly access
+// and direct which functions were to act next
 pthread_mutex_t lock;
 pthread_cond_t notify;
-
+int jobsSent;
+int jobsReceived;
 
 static void* threadpoolThread(void *threadpool);
 int threadpoolFree(Threadpool *pool);
 int threadpoolDestroy(Threadpool *pool);
 
+/* Signal Handler for SIGINT */
+void sigHandler(int sig_num) { 
+    signal(SIGINT, sigHandler); 
+    printf("Jobs Sent %d Jobs Received %d\n", jobsSent, jobsReceived); 
+    fflush(stdout); 
+}
 
 /* Calculate the dot product and send message back to package */
 void* DotProduct(void *arg) {
@@ -83,6 +92,7 @@ void* DotProduct(void *arg) {
         perror("msgrcv");
         exit(1);
     }
+    jobsReceived++;
     printf("Receiving job id %d type %lu size %lu\n", message.jobid, message.type, 
     (4 + (2 * message.innerDim)) * sizeof(int));
 
@@ -115,6 +125,7 @@ void* DotProduct(void *arg) {
         perror("msgsnd");
         exit(1);
     }
+    jobsSent++;
     printf("Sending job id %d type %lu size %d\n", message.jobid, message.type, size);
     return (void *)NULL;
 }
@@ -345,6 +356,12 @@ static void *threadpoolThread(void *threadpool) {
 
 
 int main(int argc, char* argv[]) {
+    // Initialize job values
+    jobsReceived = 0;
+    jobsSent = 0;
+
+    signal(SIGINT, sigHandler);
+    
     // Set up the Message Queue for Reader Process
     key_t key;
     int msqid;
@@ -362,6 +379,7 @@ int main(int argc, char* argv[]) {
     int threadpoolSize = atoi(argv[1]);
 
     // Grab number of jobs from package
+    // Done to reduce size allocated to the threadpool queue
     MatrixInfo matrixInfo;
     if (msgrcv(msqid, &matrixInfo, sizeof(MatrixInfo)*MAX_THREADS, 4, 0) < 0) {
         perror("msgrcv");

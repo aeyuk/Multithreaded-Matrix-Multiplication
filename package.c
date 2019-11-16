@@ -34,7 +34,15 @@ typedef struct ThreadData {
 } ThreadData;
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+int jobsSent;
+int jobsReceived;
 
+/* Signal Handler for SIGINT */
+void sigHandler(int sig_num) { 
+    signal(SIGINT, sigHandler); 
+    printf("Jobs Sent %d Jobs Received %d\n", jobsSent, jobsReceived); 
+    fflush(stdout); 
+}
 
 /* Package message data necessary to solve dot products and send to compute */
 void *Package(void *arg) {
@@ -65,6 +73,7 @@ void *Package(void *arg) {
         perror("msgsnd");
         exit(1);
     }
+    jobsSent++;
 
     // Status message
     printf("Sending job id %d type %lu size %d (rc = %d)\n",
@@ -129,6 +138,12 @@ int** LoadMatrix(FILE** fptr, int* numRows, int* numCols) {
 
 
 int main(int argc, char* argv[]) {
+    // Initialize job values
+    jobsReceived = 0;
+    jobsSent = 0;
+
+    signal(SIGINT, sigHandler);
+    
     // Open matrix file 1 and load data
     FILE *fptr1;
     fptr1 = fopen(argv[1], "r");
@@ -226,10 +241,10 @@ int main(int argc, char* argv[]) {
             perror("msgrcv");
             exit(1);
         }
+        jobsReceived++;
         printf("Receiving job id %d type %lu size %lu\n", result.jobid, result.type, 
         (5 * sizeof(int)));
         finalMatrix[result.rowvec][result.colvec] = result.data[0];
-        printf("%d %d = %d\n", result.rowvec, result.colvec, result.data[0]);
     }
     for (int i = 0; i < numRows1; i++) {
         for (int j = 0; j < numCols2; j++) {
