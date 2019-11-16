@@ -33,12 +33,10 @@ typedef struct ThreadData {
     int queueid; // Message queue id
 } ThreadData;
 
-
-// TRY ALLOCATING IN COMPUTE THE SAME WAY AND SEE IF SIZE CHANES IN BOTH PROGRAMS
-// TRY MOVING MSGSND OUTSIDE OF THREAD FUNCTION
-
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
+
+/* Package message data necessary to solve dot products and send to compute */
 void *Package(void *arg) {
     ThreadData *myArgs = (ThreadData *) arg;
     // Msg *myMessage = malloc(sizeof *myMessage);
@@ -65,7 +63,7 @@ void *Package(void *arg) {
     int rc = 0;
     if ((rc = msgsnd(myArgs->queueid, &myMessage, size, IPC_NOWAIT)) < 0) {
         perror("msgsnd");
-        exit(3);
+        exit(1);
     }
 
     // Status message
@@ -77,6 +75,8 @@ void *Package(void *arg) {
     return NULL;
 }
 
+
+/* Create and allocate space for two matrices from files */
 int** LoadMatrix(FILE** fptr, int* numRows, int* numCols) {
     // Save row and column values
     fseek(*fptr, 0, SEEK_SET);
@@ -134,7 +134,7 @@ int main(int argc, char* argv[]) {
     fptr1 = fopen(argv[1], "r");
     if (NULL == fptr1) {
         printf("Cannot open file %s\n", argv[1]);
-        exit(0);
+        exit(1);
     }
     int numRows1 = 0;
     int numCols1 = 0;
@@ -145,7 +145,7 @@ int main(int argc, char* argv[]) {
     fptr2 = fopen(argv[2], "r");
     if (NULL == fptr2) {
         printf("Cannot open file %s\n", argv[2]);
-        exit(0);
+        exit(1);
     }
     int numRows2 = 0;
     int numCols2 = 0;
@@ -177,9 +177,9 @@ int main(int argc, char* argv[]) {
     MatrixInfo matrixInfo;
     matrixInfo.type = 1;
     matrixInfo.jobs = totalJobs;
-    if (msgsnd(msqid, &totalJobs, sizeof(int), IPC_NOWAIT) < 0) {
+    if (msgsnd(msqid, &matrixInfo, sizeof(int), IPC_NOWAIT) < 0) {
         perror("msgsnd");
-        exit(3);
+        exit(1);
     }
 
     pthread_t threads[totalJobs];
