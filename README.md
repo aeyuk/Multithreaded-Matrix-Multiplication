@@ -16,8 +16,8 @@ Once all the calculations are completed, the package will print the output matri
 calculate the value, complete the calculation and put the result back on the message queue with a message *type 2*.
 
 Each program will capture a `SIGINT`. 
-When a `SIGINT` is received (Ctl-C), each program will print out a status of the calculation. 
-Ctl-\ will need to be used to terminate program.
+When a `SIGINT` is received with `Ctl-C`, each program will print out a status of the calculation. 
+`Ctl-\` will need to be used to terminate program.
 `Jobs Sent 5 Jobs Received 0`
 
 Each program will print a message when a message is successfully sent of received.
@@ -46,4 +46,10 @@ To run *package*: `./package matrix1.dat matrix2.dat m_output.dat 3`
 To run *compute*: `./compute <thread pool size>` (add argument `-n` to just read and output calculations).
 Use `Ctrl-C` to view counts for jobs sent and received.
 Use `Ctrl-\' to quit the program. (compute will run endlessly).
+
+## Additional Notes:
+* Results/execution may vary depending on your system/server
+* mbrossard's repository for threadpools was heavily referenced.
+[Click here](https://github.com/mbrossard/threadpool) to view it.
+* `Ctrl-C` may interrupt msgrcv and produce an error. I attempted to fix this but it may still produce errors.
 
