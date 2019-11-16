@@ -7,6 +7,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <string.h>
+#include <errno.h>
 
 #define MAX_THREADS 2500 // Largest dimension is 50; 50 * 50 = 2500
 #define MAX_QUEUE 65536
@@ -89,8 +90,11 @@ void* DotProduct(void *arg) {
     // Read in messages from package
     Msg message;
     if (msgrcv(threadData.msqid, &message, sizeof(Msg), 1, 0) < 0) {
-        perror("msgrcv");
-        exit(1);
+        if (errno == EINTR);
+        else {
+            perror("msgrcv");
+            exit(1);
+        }
     }
     jobsReceived++;
     printf("Receiving job id %d type %lu size %lu\n", message.jobid, message.type, 

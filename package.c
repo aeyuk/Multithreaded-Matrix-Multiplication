@@ -7,6 +7,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <string.h>
+#include <errno.h>
 
 typedef struct QueueMessage {
     long type;      // Message type
@@ -238,8 +239,11 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < totalJobs; i++) {
         Msg result;
         if (msgrcv(msqid, &result, sizeof(Msg), 2, 0) < 0) {
-            perror("msgrcv");
-            exit(1);
+            if (errno == EINTR);
+            else {
+                perror("msgrcv");
+                exit(1);
+            }
         }
         jobsReceived++;
         printf("Receiving job id %d type %lu size %lu\n", result.jobid, result.type, 
