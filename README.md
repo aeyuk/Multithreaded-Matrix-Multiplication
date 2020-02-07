@@ -1,5 +1,13 @@
 # Multithreaded Matrix Multiplication
 
+## Current Issues
+
+*This project has many issues that need to be fixed still.*
+* msgrcv operates serially rather than maximizing parallelism
+* Messages are built twice technically. A different method should be used to achieve asynchronous message building
+* Message counts are not protected in compute
+* The critical section is way too large in package
+
 ## Description
 
 This project codes a multithreaded reader/writer system that multiples matrices using ipc message queues.
